@@ -10,7 +10,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       # Chi nhan request gui toi dung ten mien nay (doi cho khop ten mien cua ban).
-      - AllowedHosts=nghiphep.hoanganhplus01.io.vn;localhost
+      - AllowedHosts=qlhv.hoanganhplus01.io.vn;localhost
     volumes:
       # ve trai = thu muc that tren server, ve phai = thu muc trong container
       - ./data/AppData:/app/AppData   # du lieu (file JSON, sau nay la file .db)

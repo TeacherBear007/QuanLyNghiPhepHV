@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>QuanLyNghiPhepHV</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Du lieu chay that nam trong thu muc AppData. Khong dong goi vao ban publish
+         de khong ghi de len du lieu dang dung tren may chay web. -->
+    <Content Remove="AppData\**" />
+    <None Remove="AppData\**" />
+  </ItemGroup>
+</Project>

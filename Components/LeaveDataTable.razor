@@ -1,0 +1,90 @@
+<div class="table-scroll">
+    <table class="leave-table">
+        <thead>
+            <tr>
+                <th>STT</th><th>MÃ ĐƠN</th><th>MÃ HV / HỌ TÊN</th><th>LỚP</th><th>LOẠI ĐƠN</th>
+                <th>THỜI GIAN NGHỈ</th><th>LÝ DO</th><th>TRẠNG THÁI</th><th>THAO TÁC</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (!PageItems.Any())
+            {
+                <tr><td class="empty-table" colspan="9">Không tìm thấy đơn nghỉ phép phù hợp.</td></tr>
+            }
+            else
+            {
+                int rowIndex = (currentPage - 1) * PageSize;
+                foreach (var item in PageItems)
+                {
+                    rowIndex++;
+                    <tr @key="item.Id">
+                        <td>@rowIndex</td>
+                        <td><b class="text-blue">@item.MaDon</b></td>
+                        <td><div class="student-name">@item.HoTen</div><span class="subtext">@item.MaHocVien</span></td>
+                        <td>@item.Lop</td>
+                        <td><span class="type-pill">@item.LoaiDon</span></td>
+                        <td><div>@item.TuThoiDiem.ToString("dd/MM/yyyy HH:mm")</div><span class="subtext">đến @item.DenThoiDiem.ToString("dd/MM/yyyy HH:mm")</span></td>
+                        <td class="reason-cell" title="@item.LyDo">@item.LyDo</td>
+                        <td><span class="@CssStatus(item.TrangThai)">@item.TrangThai</span></td>
+                        <td>
+                            <div class="table-actions">
+                                <button class="icon-action view-action" title="Xem đơn" @onclick="() => View.InvokeAsync(item)">◉</button>
+                                @if (CanManage && item.TrangThai == "Chờ duyệt")
+                                {
+                                    <button class="icon-action edit-action" title="Sửa đơn" @onclick="() => Edit.InvokeAsync(item)">✎</button>
+                                    <button class="icon-action delete-action" title="Xóa đơn" @onclick="() => Delete.InvokeAsync(item)">▤</button>
+                                }
+                                @if (CanApprove && item.TrangThai == "Chờ duyệt")
+                                {
+                                    <button class="btn mini primary" @onclick="() => View.InvokeAsync(item)">Duyệt</button>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>
+<div class="table-pagination">
+    <span>
+        Hiển thị
+        <b>
+            @(Items.Count == 0 ? 0 : (currentPage - 1) * PageSize + 1)
+            – @Math.Min(currentPage * PageSize, Items.Count)
+        </b>
+        / @Items.Count đơn
+    </span>
+
+    <div class="pagination-controls">
+        <button disabled="@(currentPage <= 1)"
+                @onclick="() => currentPage--">
+            ‹
+        </button>
+
+        <span>Trang @(currentPage) / @TotalPages</span>
+
+        <button disabled="@(currentPage >= TotalPages)"
+                @onclick="() => currentPage++">
+            ›
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public List<LeaveRequest> Items { get; set; } = new();
+    [Parameter] public bool CanManage { get; set; }
+    [Parameter] public bool CanApprove { get; set; }
+    [Parameter] public EventCallback<LeaveRequest> View { get; set; }
+    [Parameter] public EventCallback<LeaveRequest> Edit { get; set; }
+    [Parameter] public EventCallback<LeaveRequest> Delete { get; set; }
+    private const int PageSize = 8;
+    private int currentPage = 1;
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(Items.Count / (double)PageSize));
+    private IEnumerable<LeaveRequest> PageItems => Items.Skip((currentPage - 1) * PageSize).Take(PageSize);
+    protected override void OnParametersSet() => currentPage = Math.Clamp(currentPage, 1, TotalPages);
+    private static string CssStatus(string status) => status switch
+    {
+        "Đã duyệt" => "status approved", "Từ chối" => "status rejected", _ => "status pending"
+    };
+}

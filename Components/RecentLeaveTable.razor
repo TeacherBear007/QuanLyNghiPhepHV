@@ -1,0 +1,12 @@
+<div class="table-scroll">
+<table class="leave-table recent-table"><thead><tr><th>MÃ ĐƠN</th><th>HỌC VIÊN</th><th>LỚP</th><th>THỜI GIAN NGHỈ</th><th>TRẠNG THÁI</th><th>THAO TÁC</th></tr></thead>
+<tbody>@foreach (var item in Items)
+{
+    <tr @key="item.Id"><td><b class="text-blue">@item.MaDon</b></td><td><b>@item.HoTen</b><div class="subtext">@item.MaHocVien</div></td><td>@item.Lop</td><td>@item.TuThoiDiem.ToString("dd/MM/yyyy") - @item.DenThoiDiem.ToString("dd/MM/yyyy")</td><td><span class="@CssStatus(item.TrangThai)">@item.TrangThai</span></td><td><button class="btn small outline" @onclick="() => View.InvokeAsync(item)">◉ Xem</button></td></tr>
+}</tbody></table></div>
+@code {
+    [Parameter, EditorRequired] public List<LeaveRequest> Items { get; set; } = new();
+    [Parameter] public EventCallback<LeaveRequest> View { get; set; }
+    private static string CssStatus(string status) => status switch
+    { "Đã duyệt" => "status approved", "Từ chối" => "status rejected", _ => "status pending" };
+}

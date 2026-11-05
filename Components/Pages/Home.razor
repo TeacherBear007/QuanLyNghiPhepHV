@@ -1,0 +1,702 @@
+@page "/"
+@inject DemoSession Session
+@inject DemoAuthService Auth
+@inject LeaveRepository Repository
+@inject IJSRuntime JS
+
+<PageTitle>Quản lý nghỉ phép | Học viện An ninh nhân dân</PageTitle>
+
+@if (!Session.IsAuthenticated)
+{
+    <div class="login-screen">
+        <div class="login-right">
+            <form class="login-card" @onsubmit="Login" @onsubmit:preventDefault="true">
+                <div class="login-card-icon">▣</div>
+                <p class="eyebrow">CỔNG QUẢN LÝ</p>
+                <h2>Đăng nhập hệ thống</h2>
+                <p class="muted">Vui lòng nhập tài khoản và chọn đúng vai trò công tác.</p>
+                <label class="field-label" for="username">Tên đăng nhập</label>
+                <input id="username" class="field-input" autocomplete="username" placeholder="Nhập tài khoản" @bind="loginUser" @bind:event="oninput" />
+                <label class="field-label" for="password">Mật khẩu</label>
+                <input id="password" class="field-input" type="password" autocomplete="current-password" placeholder="Nhập mật khẩu" @bind="loginPassword" @bind:event="oninput" />
+                <label class="field-label" for="role">Chức vụ / vai trò</label>
+                <select id="role" class="field-input" @bind="loginRole">
+                    <option value="@UserRole.TrungDoi">Giáo viên trung đội</option>
+                    <option value="@UserRole.PhongQLHV">Cán bộ Phòng QLHV</option>
+                    <option value="@UserRole.BoMon">Giáo viên bộ môn</option>
+                </select>
+                @if (!string.IsNullOrEmpty(loginError))
+                {
+                    <div class="alert error">@loginError</div>
+                }
+                <button class="btn primary login-submit" type="submit"><span>↪</span> Đăng nhập</button>
+                <div class="demo-accounts">
+                    <strong>Tài khoản dùng thử:</strong>
+                    <p><code>trungdoi</code> · Giáo viên trung đội</p>
+                    <p><code>phongqlhv</code> · Cán bộ Phòng QLHV</p>
+                    <p><code>bomon</code> · Giáo viên bộ môn</p>
+                    <span>Mật khẩu chung: <code>Demo@@2026</code></span>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+else
+{
+    <div class="main-app">
+        <header class="academy-banner">
+           <div class="academy-brand">
+              <img src="/image/logo_hoc_vien.png"
+                 alt="Logo Học viện An ninh nhân dân" />
+
+              <div class="academy-banner-text">
+                 <h1>HỌC VIỆN AN NINH NHÂN DÂN</h1>
+
+                 <div class="academy-subtitle">
+                      <span>HỆ THỐNG QUẢN LÝ HỌC VIÊN NGHỈ PHÉP</span>
+
+                      <span class="academy-demo">
+                         PHÒNG QUẢN LÝ HỌC VIÊN · HỆ THỐNG DEMO
+                      </span>
+                 </div>
+              </div>
+
+           </div>
+
+           <div class="academy-banner-actions">
+              <button type="button"
+                      @onclick="() => showAccountWindow = true">
+                 Thông tin tài khoản
+              </button>
+
+              <button type="button"
+                      @onclick="() => showSecurityWindow = true">
+                 Bảo mật
+              </button>
+           </div>
+
+        </header>
+
+
+        <div class="shell @(menuCollapsed ? "menu-collapsed" : "")">
+            <aside class="sidebar">
+            <div class="sidebar-meta"><span class="live-dot"></span> Hệ thống đang hoạt động</div>
+            <nav class="menu">
+                <div class="menu-caption">MENU CHÍNH</div>
+                <button class="nav-link @(activeTab == "dashboard" ? "active" : "")" @onclick="ShowDashboard"><span>⌂</span> Tổng quan</button>
+                <button class="nav-link @(activeTab == "leaves" ? "active" : "")" @onclick="ShowLeaves"><span>▤</span> Quản lý đơn nghỉ <b class="nav-count">@allRecords.Count</b></button>
+                <button class="nav-link @(activeTab == "students" ? "active" : "")" @onclick="ShowStudents"><span>♙</span> Danh sách học viên</button>
+                @if (Session.CanExport)
+                {
+                    <div class="menu-caption subcaption">BÁO CÁO & GIÁM SÁT</div>
+                    <button class="nav-link @(activeTab == "reports" ? "active" : "")" @onclick="ShowReports"><span>▥</span> Thống kê báo cáo</button>
+                    <button class="nav-link @(activeTab == "audit" ? "active" : "")" @onclick="ShowAudit"><span>◷</span> Nhật ký xử lý</button>
+                }
+            </nav>
+            <div class="sidebar-bottom">
+                <div class="sidebar-person">@(Session.UserName.Length > 0 ? Session.UserName.Substring(0, 1).ToUpperInvariant() : "?")</div>
+                <div><strong>@Session.UserName</strong><small>@Session.RoleDisplay</small></div>
+            </div>
+        </aside>
+
+        <div class="workspace">
+            <header class="topbar">
+
+               <div class="topbar-left">
+
+                  <button type="button"
+                          class="toolbar-button"
+                          title="Ẩn / hiện menu"
+                          @onclick="ToggleSidebar">
+                     ☰
+                  </button>
+
+                  <button type="button"
+                          class="toolbar-button"
+                          title="Trang chủ"
+                          @onclick="ShowLeaves">
+                      🏠
+                  </button>
+
+               </div>
+
+               <div class="header-right">
+
+                   <span class="date-chip">
+                       ◷ @DateTime.Today.ToString("dd/MM/yyyy")
+                   </span>
+
+                   <span class="role-chip">
+                         @Session.RoleDisplay
+                   </span>
+
+                   <button class="btn signout" @onclick="Logout">
+                           Đăng xuất ↗
+                   </button>
+
+               </div>
+
+            </header>
+
+            <main class="content">
+                
+               <div class="page-heading heading-only-actions">
+                 <div class="heading-actions">
+
+                     @if (Session.CanExport)
+                         {
+                         <button class="btn outline"
+                                 @onclick="ExportExcel">
+                                 ⇩ Xuất Excel
+                         </button>
+                         }
+
+                     @if (Session.CanManage && activeTab != "leaves")
+                         {
+                         <button class="btn primary"
+                                 @onclick="ShowLeaves">
+                                 ＋ Lập đơn nghỉ
+                         </button>
+                         }
+
+                 </div>
+               </div>
+
+
+                @if (!string.IsNullOrWhiteSpace(notice))
+                {
+                    <div class="alert success" role="status">@notice <button @onclick="ClearNotice" aria-label="Đóng thông báo">×</button></div>
+                }
+                @if (!string.IsNullOrWhiteSpace(pageError))
+                {
+                    <div class="alert error" role="alert">@pageError <button @onclick="ClearPageError" aria-label="Đóng thông báo">×</button></div>
+                }
+
+                @if (activeTab == "dashboard")
+                {
+                    <div class="stats-grid">
+                        <div class="stat-card"><div class="stat-icon navy">▤</div><div><span>TỔNG SỐ ĐƠN</span><strong>@allRecords.Count</strong><small>Tất cả đơn nghỉ phép</small></div></div>
+                        <div class="stat-card"><div class="stat-icon amber">◷</div><div><span>CHỜ XÉT DUYỆT</span><strong>@PendingCount</strong><small>Cần được xử lý</small></div></div>
+                        <div class="stat-card"><div class="stat-icon green">✓</div><div><span>ĐÃ DUYỆT</span><strong>@ApprovedCount</strong><small>Đơn được chấp thuận</small></div></div>
+                        <div class="stat-card"><div class="stat-icon rose">×</div><div><span>ĐÃ TỪ CHỐI</span><strong>@RejectedCount</strong><small>Đơn không được duyệt</small></div></div>
+                    </div>
+                    <div class="dashboard-grid">
+                        <section class="panel">
+                            <div class="panel-head"><div><h2>Tình hình xử lý đơn</h2><p>Tỷ lệ theo từng trạng thái trên tổng số đơn</p></div><span class="panel-icon">▥</span></div>
+                            <div class="chart-body">
+                                <div class="bar-row"><span>Đã duyệt</span><div class="bar-track"><div class="bar-fill approved-fill" style="width:@Percentage(ApprovedCount)%"></div></div><strong>@ApprovedCount</strong></div>
+                                <div class="bar-row"><span>Chờ duyệt</span><div class="bar-track"><div class="bar-fill pending-fill" style="width:@Percentage(PendingCount)%"></div></div><strong>@PendingCount</strong></div>
+                                <div class="bar-row"><span>Từ chối</span><div class="bar-track"><div class="bar-fill rejected-fill" style="width:@Percentage(RejectedCount)%"></div></div><strong>@RejectedCount</strong></div>
+                            </div>
+                        </section>
+                        <section class="panel">
+                            <div class="panel-head"><div><h2>Thông tin hệ thống</h2><p>Chế độ chạy dành cho bài tập lớn</p></div><span class="panel-icon">ⓘ</span></div>
+                            <div class="quick-info"><div><span>Học viên trong danh mục</span><strong>@students.Count</strong></div><div><span>Đơn nghỉ trong ngày</span><strong>@allRecords.Count(x => x.LoaiDon == "Trong ngày")</strong></div><div><span>Đơn nghỉ dài ngày</span><strong>@allRecords.Count(x => x.LoaiDon == "Dài ngày")</strong></div><div><span>Quyền truy cập</span><strong>@Session.RoleDisplay</strong></div></div>
+                        </section>
+                    </div>
+                    <section class="panel"><div class="panel-head"><div><h2>Đơn nghỉ gần đây</h2><p>Nhấn xem để mở hồ sơ nghỉ phép</p></div><button class="link-button" @onclick="ShowLeaves">Xem tất cả →</button></div>@RecentTable()</section>
+                }
+                else if (activeTab == "leaves")
+                {
+                    @if (Session.CanManage)
+                    {
+                        <section class="panel form-panel">
+                            <div class="panel-head"><div><h2>▤ LẬP ĐƠN XIN NGHỈ PHÉP</h2><p>Điền theo mẫu đơn nghỉ phép của Học viện. Các ô có dấu * là bắt buộc.</p></div><span class="form-status">ĐƠN MỚI</span></div>
+                            <div class="form-body">
+                                <div class="form-grid">
+                                    <div class="field"><label>Học viên <em>*</em></label><select @bind="newInput.MaHocVien"><option value="">-- Chọn mã / tên học viên --</option>@foreach (var s in students) { <option value="@s.MaHocVien">@s.MaHocVien - @s.HoTen</option> }</select></div>
+                                    <div class="field"><label>Học viên lớp</label><input value="@SelectedStudentLabel(newInput.MaHocVien)" disabled /></div>
+                                    <div class="field"><label>Chủ nhiệm trung đội <em>*</em></label><input @bind="newInput.TrungDoi" maxlength="80" placeholder="VD: Trung đội 1" /></div>
+                                    <div class="field"><label>Thời gian bắt đầu <em>*</em></label><input type="datetime-local" @bind="newInput.TuThoiDiem" @bind:format="yyyy-MM-ddTHH:mm" /></div>
+                                    <div class="field"><label>Thời gian kết thúc <em>*</em></label><input type="datetime-local" @bind="newInput.DenThoiDiem" @bind:format="yyyy-MM-ddTHH:mm" /></div>
+                                    <div class="field"><label>Loại đơn (tự tính)</label><input value="@(newInput.TuThoiDiem.Date == newInput.DenThoiDiem.Date ? "Trong ngày" : "Dài ngày")" disabled /></div>
+                                    <div class="field span-2"><label>Lý do xin nghỉ <em>*</em></label><textarea @bind="newInput.LyDo" maxlength="500" rows="2" placeholder="Nhập lý do xin nghỉ phép..."></textarea></div>
+                                    <div class="field span-2"><label>Địa chỉ nơi nghỉ <em>*</em></label><input @bind="newInput.DiaChiNoiNghi" maxlength="300" placeholder="Nhập địa chỉ cụ thể nơi đến nghỉ" /></div>
+                                </div>
+                                <div class="form-footer"><span>Đơn mới sẽ có trạng thái <b>Chờ duyệt</b> sau khi gửi.</span><div><button class="btn outline" @onclick="ClearNew">↻ Làm lại</button><button class="btn outline" @onclick="PreviewNew">◉ Xem mẫu đơn</button><button class="btn primary" @onclick="AddLeave">➤ Gửi đơn nghỉ phép</button></div></div>
+                            </div>
+                        </section>
+                    }
+                    <section class="panel list-panel">
+                        <div class="panel-head"><div><h2>▥ DANH SÁCH ĐƠN XIN NGHỈ PHÉP</h2><p>Tra cứu, theo dõi và xử lý đơn nghỉ học của học viên.</p></div><span class="total-label">@Filtered.Count bản ghi</span></div>
+                        <div class="filters">
+                            <div class="field wide"><label>Tìm kiếm</label><input @bind="keyword" @bind:event="oninput" placeholder="Mã đơn, mã HV, họ tên, lý do..." /></div>
+                            <div class="field"><label>Lớp</label><select @bind="filterClass"><option value="">Tất cả lớp</option>@foreach (var c in Classes) { <option value="@c">@c</option> }</select></div>
+                            <div class="field"><label>Loại đơn</label><select @bind="filterType"><option value="">Tất cả</option><option>Trong ngày</option><option>Dài ngày</option></select></div>
+                            <div class="field"><label>Trạng thái</label><select @bind="filterStatus"><option value="">Tất cả</option><option>Chờ duyệt</option><option>Đã duyệt</option><option>Từ chối</option></select></div>
+                            <div class="filter-buttons"><button class="btn small outline" @onclick="ResetFilters">↻ Reset</button></div>
+                        </div>
+                        @LeaveTable(Filtered)
+                    </section>
+                    <div class="bottom-export">Tổng số đơn trong hệ thống: <b>@allRecords.Count</b> @if (Session.CanExport) { <button class="btn secondary" @onclick="ExportExcel">⇩ Xuất danh sách lọc ra Excel (.xlsx)</button> }</div>
+                }
+                else if (activeTab == "students")
+                {
+                    <section class="panel">
+                        <div class="panel-head"><div><h2>DANH SÁCH HỌC VIÊN</h2><p>Danh mục học viên mẫu dùng để điền đơn nghỉ phép.</p></div><span class="total-label">@students.Count học viên</span></div>
+                        <div class="filters"><div class="field wide"><label>Tra cứu học viên</label><input @bind="studentSearch" @bind:event="oninput" placeholder="Tìm tên, mã học viên hoặc lớp..." /></div><button class="btn small outline" @onclick="ResetStudentSearch">↻ Reset</button></div>
+                        <div class="table-scroll"><table><thead><tr><th>STT</th><th>MÃ HỌC VIÊN</th><th>HỌ VÀ TÊN</th><th>LỚP</th><th>TRUNG ĐỘI</th><th>SỐ ĐƠN NGHỈ</th></tr></thead><tbody>@{int studentIndex = 0;}@foreach (var student in FilteredStudents) { studentIndex++; <tr><td>@studentIndex</td><td><b>@student.MaHocVien</b></td><td>@student.HoTen</td><td>@student.Lop</td><td>@student.TrungDoi</td><td>@allRecords.Count(x => x.MaHocVien == student.MaHocVien)</td></tr> }</tbody></table></div>
+                    </section>
+                }
+                else if (activeTab == "reports" && Session.CanExport)
+                {
+                    <div class="stats-grid">
+                        <div class="stat-card"><div class="stat-icon navy">▤</div><div><span>TỔNG ĐƠN</span><strong>@allRecords.Count</strong><small>Toàn bộ đơn nghỉ</small></div></div>
+                        <div class="stat-card"><div class="stat-icon amber">◷</div><div><span>CHƯA XỬ LÝ</span><strong>@PendingCount</strong><small>Chờ duyệt</small></div></div>
+                        <div class="stat-card"><div class="stat-icon green">✓</div><div><span>ĐÃ DUYỆT</span><strong>@ApprovedCount</strong><small>Được đồng ý</small></div></div>
+                        <div class="stat-card"><div class="stat-icon rose">×</div><div><span>TỪ CHỐI</span><strong>@RejectedCount</strong><small>Không chấp thuận</small></div></div>
+                    </div>
+                    <section class="panel"><div class="panel-head"><div><h2>THỐNG KÊ THEO LỚP</h2><p>Số đơn nghỉ học tương ứng với từng lớp</p></div><button class="btn outline" @onclick="ExportExcel">⇩ Xuất Excel</button></div><div class="table-scroll"><table><thead><tr><th>STT</th><th>LỚP</th><th>TỔNG ĐƠN</th><th>CHỜ DUYỆT</th><th>ĐÃ DUYỆT</th><th>TỪ CHỐI</th></tr></thead><tbody>@{int classIndex = 0;}@foreach (var c in Classes) { classIndex++; <tr><td>@classIndex</td><td><b>@c</b></td><td>@allRecords.Count(x => x.Lop == c)</td><td>@allRecords.Count(x => x.Lop == c && x.TrangThai == "Chờ duyệt")</td><td>@allRecords.Count(x => x.Lop == c && x.TrangThai == "Đã duyệt")</td><td>@allRecords.Count(x => x.Lop == c && x.TrangThai == "Từ chối")</td></tr> }</tbody></table></div></section>
+                }
+                else if (activeTab == "audit" && Session.CanExport)
+                {
+                    <section class="panel"><div class="panel-head"><div><h2>NHẬT KÝ XỬ LÝ</h2><p>Lưu dấu vết các thao tác thêm, sửa, xóa và xét duyệt.</p></div><button class="btn outline" @onclick="Reload">↻ Làm mới</button></div><div class="table-scroll"><table><thead><tr><th>THỜI GIAN</th><th>TÀI KHOẢN</th><th>THAO TÁC</th><th>ĐỐI TƯỢNG</th></tr></thead><tbody>@foreach (var log in audit) { <tr><td>@log.At.ToString("dd/MM/yyyy HH:mm:ss")</td><td>@log.User</td><td><b>@log.Action</b></td><td>@log.Detail</td></tr> }</tbody></table></div></section>
+                }
+            </main>
+            <footer class="footer">© 2026 · Hệ thống quản lý học viên nghỉ phép · Bản minh họa phục vụ bài tập lớn <span>Blazor Web App · .NET 8</span></footer>
+        </div>
+    </div>
+    </div>
+
+    @if (detail is not null)
+    {
+        <div class="overlay" @onclick="CloseDetail">
+            <div class="modal document-modal" role="dialog" aria-modal="true" aria-label="Chi tiết đơn nghỉ phép" @onclick:stopPropagation="true">
+                <div class="modal-head"><div><p class="eyebrow">HỒ SƠ XIN NGHỈ PHÉP</p><h2>@(detail.Id == 0 ? "Xem trước đơn nghỉ" : $"Chi tiết đơn · {detail.MaDon}")</h2></div><button class="x-button" title="Đóng" @onclick="CloseDetail">×</button></div>
+                <div class="modal-scroll">
+                    <div class="detail-info"><span><b>Học viên:</b> @detail.HoTen · @detail.MaHocVien</span><span><b>Trạng thái:</b> <span class="@StatusClass(detail.TrangThai)">@detail.TrangThai</span></span></div>
+                    <div id="leave-print-paper" class="official-paper">
+                        <div class="paper-heading"><b>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</b><b class="national-motto">Độc lập - Tự do - Hạnh phúc</b></div>
+                        <p class="paper-dateline">Hà Nội, ngày @DateTime.Today.ToString("dd") tháng @DateTime.Today.ToString("MM") năm @DateTime.Today.ToString("yyyy")</p>
+                        <h2>ĐƠN XIN NGHỈ PHÉP</h2>
+                        <div class="paper-greeting"><b>Kính gửi:</b><div>- Lãnh đạo Phòng Quản lý học viên<br />- Chủ nhiệm Trung đội: @detail.TrungDoi</div></div>
+                        <p>Tên em là: <b>@detail.HoTen</b> <span class="paper-right">Học viên lớp: <b>@detail.Lop</b></span></p>
+                        <p>Em làm đơn này xin phép được nghỉ học, nghỉ sinh hoạt để giải quyết việc riêng, thời gian:</p>
+                        <p class="indented">- Từ: <b>@detail.TuThoiDiem.ToString("HH")</b> giờ <b>@detail.TuThoiDiem.ToString("mm")</b> phút, ngày <b>@detail.TuThoiDiem.ToString("dd")</b> tháng <b>@detail.TuThoiDiem.ToString("MM")</b> năm <b>@detail.TuThoiDiem.ToString("yyyy")</b></p>
+                        <p class="indented">- Đến: <b>@detail.DenThoiDiem.ToString("HH")</b> giờ <b>@detail.DenThoiDiem.ToString("mm")</b> phút, ngày <b>@detail.DenThoiDiem.ToString("dd")</b> tháng <b>@detail.DenThoiDiem.ToString("MM")</b> năm <b>@detail.DenThoiDiem.ToString("yyyy")</b></p>
+                        <p>Lý do xin nghỉ: <span class="paper-underlined">@detail.LyDo</span></p>
+                        <p>Địa chỉ nơi nghỉ: <span class="paper-underlined">@detail.DiaChiNoiNghi</span></p>
+                        <p class="paper-indent">Em xin cam kết thực hiện đúng các quy định về việc nghỉ phép và quy định của địa phương nơi đến nghỉ.</p>
+                        <p class="paper-indent">Kính mong Lãnh đạo Phòng quản lý học viên, thầy (cô) giáo chủ nhiệm quan tâm giải quyết.</p>
+                        <p class="paper-indent">Em xin chân thành cảm ơn./.</p>
+                        <div class="signature-grid"><div><b>TRƯỞNG PHÒNG QLHV</b><small>(Ký, ghi rõ họ tên)</small></div><div><b>CHỦ NHIỆM TRUNG ĐỘI</b><small>(Ký, ghi rõ họ tên)</small></div><div><b>NGƯỜI XIN PHÉP</b><small>(Ký, ghi rõ họ tên)</small><strong>@detail.HoTen</strong></div></div>
+                        <p class="paper-footnote"><i>Ghi chú: Sau khi được cấp phép, học viên nộp giấy phép về Chủ nhiệm trung đội; sử dụng thẻ kiểm soát an ninh để ra vào cổng.</i></p>
+                    </div>
+                    @if (detail.Id != 0 && detail.TrangThai != "Chờ duyệt")
+                    {
+                        <div class="decision-line"><b>Đã xử lý:</b> @detail.TrangThai · @detail.NguoiDuyet · @(detail.NgayDuyet?.ToString("dd/MM/yyyy HH:mm")) @if (!string.IsNullOrWhiteSpace(detail.GhiChuDuyet)) { <span>· @detail.GhiChuDuyet</span> }</div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(modalError))
+                    {
+                        <div class="alert error">@modalError</div>
+                    }
+                    @if (Session.CanApprove && detail.Id != 0 && detail.TrangThai == "Chờ duyệt")
+                    {
+                        <div class="review-form"><label class="field-label">Ý kiến xét duyệt (bắt buộc khi từ chối)</label><textarea rows="2" maxlength="300" @bind="reviewNote" placeholder="Nhập ý kiến của cán bộ Phòng QLHV..."></textarea></div>
+                    }
+                </div>
+                <div class="modal-actions"><button class="btn outline" @onclick="CloseDetail">Đóng</button><button class="btn outline" @onclick="PrintDetail">▧ In đơn</button>@if (Session.CanManage && detail.Id != 0 && detail.TrangThai == "Chờ duyệt") { <button class="btn outline" @onclick="() => BeginEdit(detail)">✎ Sửa đơn</button> }@if (Session.CanApprove && detail.Id != 0 && detail.TrangThai == "Chờ duyệt") { <button class="btn danger" @onclick="() => ReviewLeave(false)">× Từ chối</button><button class="btn primary" @onclick="() => ReviewLeave(true)">✓ Duyệt đơn</button> }</div>
+            </div>
+        </div>
+    }
+    @if (editOpen && Session.CanManage)
+    {
+        <div class="overlay" @onclick="CancelEdit"><div class="modal edit-modal" role="dialog" aria-modal="true" aria-label="Sửa đơn nghỉ phép" @onclick:stopPropagation="true"><div class="modal-head"><div><p class="eyebrow">CHỈNH SỬA THÔNG TIN</p><h2>Sửa đơn nghỉ phép</h2></div><button class="x-button" @onclick="CancelEdit">×</button></div>
+            <div class="edit-fields form-grid">
+                <div class="field span-2"><label>Học viên</label><select @bind="editInput.MaHocVien">@foreach (var s in students) { <option value="@s.MaHocVien">@s.MaHocVien - @s.HoTen</option> }</select></div>
+                <div class="field"><label>Chủ nhiệm trung đội</label><input @bind="editInput.TrungDoi" maxlength="80" /></div>
+                <div class="field"><label>Loại đơn</label><input value="@(editInput.TuThoiDiem.Date == editInput.DenThoiDiem.Date ? "Trong ngày" : "Dài ngày")" disabled /></div>
+                <div class="field"><label>Bắt đầu nghỉ</label><input type="datetime-local" @bind="editInput.TuThoiDiem" @bind:format="yyyy-MM-ddTHH:mm" /></div>
+                <div class="field"><label>Kết thúc nghỉ</label><input type="datetime-local" @bind="editInput.DenThoiDiem" @bind:format="yyyy-MM-ddTHH:mm" /></div>
+                <div class="field span-2"><label>Lý do</label><textarea rows="2" maxlength="500" @bind="editInput.LyDo"></textarea></div>
+                <div class="field span-2"><label>Địa chỉ nơi nghỉ</label><textarea rows="2" maxlength="300" @bind="editInput.DiaChiNoiNghi"></textarea></div>
+            </div>@if (!string.IsNullOrWhiteSpace(modalError)) { <div class="alert error modal-inline-error">@modalError</div> }<div class="modal-actions"><button class="btn outline" @onclick="CancelEdit">Hủy</button><button class="btn primary" @onclick="SaveEdit">✓ Lưu thay đổi</button></div></div>
+        </div>
+    }
+    
+@if (showAccountWindow)
+{
+    <div class="overlay"
+         @onclick="() => showAccountWindow = false">
+
+        <div class="account-window"
+             @onclick:stopPropagation="true">
+
+            <div class="account-window-header">
+                <h2>THÔNG TIN TÀI KHOẢN</h2>
+
+                <button @onclick="() => showAccountWindow = false">
+                    ×
+                </button>
+            </div>
+
+            <div class="account-window-body">
+                <div class="account-avatar">
+                    <icon>👤</icon>
+                </div>
+
+                <div class="account-info-row">
+                    <span>Tên đăng nhập</span>
+                    <strong>@Session.UserName</strong>
+                </div>
+
+                <div class="account-info-row">
+                    <span>Chức vụ</span>
+                    <strong>@Session.RoleDisplay</strong>
+                </div>
+
+                <div class="account-info-row">
+                    <span>Trạng thái tài khoản</span>
+                    <strong class="account-active">
+                        Đang hoạt động
+                    </strong>
+                </div>
+
+                <div class="account-info-row">
+                    <span>Quyền lập và sửa đơn</span>
+                    <strong>
+                        @(Session.CanManage ? "Được phép" : "Không được phép")
+                    </strong>
+                </div>
+
+                <div class="account-info-row">
+                    <span>Quyền xét duyệt</span>
+                    <strong>
+                        @(Session.CanApprove ? "Được phép" : "Không được phép")
+                    </strong>
+                </div>
+
+                <div class="account-info-row">
+                    <span>Quyền xuất Excel</span>
+                    <strong>
+                        @(Session.CanExport ? "Được phép" : "Không được phép")
+                    </strong>
+                </div>
+            </div>
+
+            <div class="account-window-footer">
+                <button class="btn primary"
+                        @onclick="() => showAccountWindow = false">
+                    Đóng
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
+@if (showSecurityWindow)
+{
+    <div class="overlay" @onclick="() => showSecurityWindow = false">
+        <div class="account-window" @onclick:stopPropagation="true">
+            <div class="account-window-header">
+                <h2>BẢO MẬT</h2>
+                <button @onclick="() => showSecurityWindow = false">×</button>
+            </div>
+            <div class="account-window-body">
+                <div class="account-info-row"><span>Hình thức đăng nhập</span><strong>Tài khoản mô phỏng (demo)</strong></div>
+                <div class="account-info-row"><span>Khóa đăng nhập</span><strong>Sai 5 lần, khóa 1 phút</strong></div>
+                <div class="account-info-row"><span>Phân quyền</span><strong>Kiểm tra ở tầng xử lý dữ liệu</strong></div>
+                <div class="account-info-row"><span>Nhật ký thao tác</span><strong>Lưu mọi thao tác thêm, sửa, xóa, duyệt</strong></div>
+                <div class="account-info-row"><span>Đổi mật khẩu</span><strong>Không hỗ trợ trong bản demo</strong></div>
+            </div>
+            <div class="account-window-footer">
+                <button class="btn primary" @onclick="() => showSecurityWindow = false">Đóng</button>
+            </div>
+        </div>
+    </div>
+}
+
+    @if (deleteTarget is not null && Session.CanManage)
+    {
+        <div class="overlay" @onclick="() => deleteTarget = null"><div class="modal confirm-modal" role="dialog" aria-modal="true" @onclick:stopPropagation="true"><div class="warning-icon">!</div><h2>Xóa đơn nghỉ phép?</h2><p>Đơn <b>@deleteTarget.MaDon</b> của <b>@deleteTarget.HoTen</b> sẽ bị xóa khỏi danh sách. Thao tác này không thể hoàn tác.</p><div class="modal-actions center"><button class="btn outline" @onclick="() => deleteTarget = null">Hủy</button><button class="btn danger" @onclick="ConfirmDelete">Xác nhận xóa</button></div></div></div>
+    }
+}
+
+@code {
+    private string loginUser = "trungdoi";
+    private string loginPassword = "";
+    private UserRole loginRole = UserRole.TrungDoi;
+    private string loginError = "";
+    private string activeTab = "leaves";
+    private string notice = "";
+    private string pageError = "";
+    private string keyword = "";
+    private string filterClass = "";
+    private string filterStatus = "";
+    private string filterType = "";
+    private string studentSearch = "";
+    private List<Student> students = new();
+    private List<LeaveRequest> allRecords = new();
+    private List<AuditEntry> audit = new();
+    private LeaveInput newInput = new();
+    private LeaveInput editInput = new();
+    private LeaveRequest? detail;
+    private LeaveRequest? deleteTarget;
+    private bool editOpen;
+    private int editId;
+    private string reviewNote = "";
+    private string modalError = "";
+
+    //Tạo nút ẩn/hiện menu
+    private bool menuCollapsed = false;
+
+    private void ToggleSidebar()
+    {
+          menuCollapsed = !menuCollapsed;
+    }
+
+    //Tạo nút thông tin tk và bảo mật
+    private bool showAccountWindow = false;
+    private bool showSecurityWindow = false;
+
+    private string PageTitle => activeTab switch
+    {
+        "dashboard" => "Tổng quan nghỉ phép",
+        "students" => "Danh sách học viên",
+        "reports" => "Báo cáo và thống kê",
+        "audit" => "Nhật ký xử lý",
+        _ => "Quản lý học viên nghỉ phép"
+    };
+    private string PageSubtitle => activeTab switch
+    {
+        "dashboard" => "Theo dõi tình hình nghỉ phép và tiến độ xử lý đơn của học viên.",
+        "students" => "Tra cứu thông tin học viên và trung đội trực thuộc.",
+        "reports" => "Tổng hợp số liệu và xuất báo cáo phục vụ công tác quản lý.",
+        "audit" => "Theo dõi các thao tác cập nhật và xét duyệt đơn nghỉ phép.",
+        _ => "Tiếp nhận, tra cứu và xử lý đơn xin nghỉ phép theo quy trình quản lý."
+    };
+    private List<string> Classes => students.Select(x => x.Lop).Distinct().OrderBy(x => x).ToList();
+    private int PendingCount => allRecords.Count(x => x.TrangThai == "Chờ duyệt");
+    private int ApprovedCount => allRecords.Count(x => x.TrangThai == "Đã duyệt");
+    private int RejectedCount => allRecords.Count(x => x.TrangThai == "Từ chối");
+    private int Percentage(int count) => allRecords.Count == 0 ? 0 : (int)Math.Round(100.0 * count / allRecords.Count);
+    private List<LeaveRequest> Filtered => allRecords.Where(x =>
+                string.IsNullOrWhiteSpace(keyword)
+                || x.MaDon.Contains(keyword.Trim(), StringComparison.OrdinalIgnoreCase)
+                || x.MaHocVien.Contains(keyword.Trim(), StringComparison.OrdinalIgnoreCase)
+                || x.HoTen.Contains(keyword.Trim(), StringComparison.OrdinalIgnoreCase)
+                || x.LyDo.Contains(keyword.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Where(x => string.IsNullOrEmpty(filterClass) || x.Lop == filterClass)
+            .Where(x => string.IsNullOrEmpty(filterStatus) || x.TrangThai == filterStatus)
+            .Where(x => string.IsNullOrEmpty(filterType) || x.LoaiDon == filterType)
+            .ToList();
+    private List<Student> FilteredStudents => students.Where(x =>
+            string.IsNullOrWhiteSpace(studentSearch)
+            || x.MaHocVien.Contains(studentSearch.Trim(), StringComparison.OrdinalIgnoreCase)
+            || x.HoTen.Contains(studentSearch.Trim(), StringComparison.OrdinalIgnoreCase)
+            || x.Lop.Contains(studentSearch.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+
+    private void ClearNotice() => notice = string.Empty;
+    private void ClearPageError() => pageError = string.Empty;
+
+    private void Login()
+    {
+        loginError = "";
+        if (!Auth.TryLogin(loginUser, loginPassword, loginRole, out loginError)) return;
+        loginPassword = "";
+        activeTab = "leaves";
+        Reload();
+    }
+
+    private void Logout()
+    {
+        Session.SignOut();
+        detail = null;
+        editOpen = false;
+        deleteTarget = null;
+        loginPassword = "";
+        loginError = "";
+        notice = "";
+        pageError = "";
+    }
+
+    private void Reload()
+    {
+        try
+        {
+            students = Repository.GetStudents(Session);
+            allRecords = Repository.GetRequests(Session);
+            audit = Session.CanExport ? Repository.GetAudit(Session) : new();
+            pageError = "";
+        }
+        catch (Exception ex) { pageError = ex.Message; }
+    }
+
+    private void SwitchTab(string tab)
+    {
+        if ((tab == "reports" || tab == "audit") && !Session.CanExport) return;
+        activeTab = tab;
+        notice = "";
+        pageError = "";
+    }
+
+    private void ShowDashboard() => SwitchTab("dashboard");
+    private void ShowLeaves() => SwitchTab("leaves");
+    private void ShowStudents() => SwitchTab("students");
+    private void ShowReports() => SwitchTab("reports");
+    private void ShowAudit() => SwitchTab("audit");
+    private void ResetStudentSearch() => studentSearch = string.Empty;
+
+    private void ResetFilters()
+    {
+        keyword = "";
+        filterClass = "";
+        filterStatus = "";
+        filterType = "";
+    }
+
+    private void ClearNew()
+    {
+        newInput = new LeaveInput();
+        pageError = "";
+    }
+
+    private string SelectedStudentLabel(string code)
+    {
+        var student = students.FirstOrDefault(x => x.MaHocVien == code);
+        return student is null ? "Chưa chọn học viên" : $"{student.HoTen} · {student.Lop}";
+    }
+
+    private void AddLeave()
+    {
+        try
+        {
+            var added = Repository.Add(Session, newInput);
+            Reload();
+            ClearNew();
+            notice = $"Đã gửi đơn {added.MaDon}. Đơn đang chờ cán bộ Phòng QLHV duyệt.";
+        }
+        catch (Exception ex) { pageError = ex.Message; notice = ""; }
+    }
+
+    private void PreviewNew()
+    {
+        var student = students.FirstOrDefault(x => x.MaHocVien == newInput.MaHocVien);
+        if (student is null) { pageError = "Vui lòng chọn học viên trước khi xem mẫu đơn."; return; }
+        detail = new LeaveRequest
+        {
+            MaHocVien = student.MaHocVien, HoTen = student.HoTen, Lop = student.Lop,
+            TrungDoi = newInput.TrungDoi, TuThoiDiem = newInput.TuThoiDiem,
+            DenThoiDiem = newInput.DenThoiDiem, LyDo = newInput.LyDo,
+            DiaChiNoiNghi = newInput.DiaChiNoiNghi, TrangThai = "Bản xem trước"
+        };
+        pageError = "";
+    }
+
+    private void OpenDetail(LeaveRequest record)
+    {
+        detail = record.Clone();
+        reviewNote = "";
+        modalError = "";
+        pageError = "";
+    }
+
+    private void CloseDetail() => detail = null;
+
+    private void BeginEdit(LeaveRequest record)
+    {
+        if (!Session.CanManage || record.TrangThai != "Chờ duyệt") return;
+        editId = record.Id;
+        editInput = LeaveInput.From(record);
+        detail = null;
+        modalError = "";
+        editOpen = true;
+    }
+
+    private void CancelEdit() => editOpen = false;
+
+    private void SaveEdit()
+    {
+        try
+        {
+            var updated = Repository.Update(Session, editId, editInput);
+            editOpen = false;
+            Reload();
+            notice = $"Đã cập nhật đơn {updated.MaDon}.";
+        }
+        catch (Exception ex) { modalError = ex.Message; notice = ""; }
+    }
+
+    private void AskDelete(LeaveRequest item)
+    {
+        if (Session.CanManage && item.TrangThai == "Chờ duyệt") deleteTarget = item.Clone();
+    }
+
+    private void ConfirmDelete()
+    {
+        if (deleteTarget is null) return;
+        try
+        {
+            var code = deleteTarget.MaDon;
+            Repository.Delete(Session, deleteTarget.Id);
+            deleteTarget = null;
+            Reload();
+            notice = $"Đã xóa đơn {code}.";
+        }
+        catch (Exception ex) { deleteTarget = null; pageError = ex.Message; }
+    }
+
+    private void ReviewLeave(bool approved)
+    {
+        if (detail is null) return;
+        try
+        {
+            var updated = Repository.Review(Session, detail.Id, approved, reviewNote);
+            detail = null;
+            Reload();
+            notice = $"Đã {(approved ? "duyệt" : "từ chối")} đơn {updated.MaDon}.";
+        }
+        catch (Exception ex) { modalError = ex.Message; notice = ""; }
+    }
+
+    private async Task ExportExcel()
+    {
+        try
+        {
+            var rows = activeTab == "leaves" ? Filtered : allRecords;
+            var bytes = Repository.ExportExcel(Session, rows);
+            string name = $"DanhSachNghiPhep_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+            await JS.InvokeVoidAsync("leaveApp.downloadBase64", name, Convert.ToBase64String(bytes),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            notice = $"Đã chuẩn bị file Excel với {rows.Count} đơn nghỉ phép.";
+        }
+        catch (Exception ex) { pageError = ex.Message; notice = ""; }
+    }
+
+    private async Task PrintDetail()
+    {
+        try { await JS.InvokeVoidAsync("leaveApp.printPaper", "leave-print-paper"); }
+        catch (Exception ex) { pageError = ex.Message; }
+    }
+
+    private string StatusClass(string s) => s switch
+    {
+        "Đã duyệt" => "status approved",
+        "Từ chối" => "status rejected",
+        "Chờ duyệt" => "status pending",
+        _ => "status neutral"
+    };
+
+    private RenderFragment RecentTable() => builder =>
+    {
+        // Dùng lại bảng có sẵn với 5 đơn gần nhất, giữ nút Xem chi tiết hoạt động.
+        builder.OpenComponent<RecentLeaveTable>(0);
+        builder.AddAttribute(1, "Items", allRecords.Take(5).ToList());
+        builder.AddAttribute(2, "View", EventCallback.Factory.Create<LeaveRequest>(this, OpenDetail));
+        builder.CloseComponent();
+    };
+
+    private RenderFragment LeaveTable(List<LeaveRequest> items) => builder =>
+    {
+        builder.OpenComponent<LeaveDataTable>(0);
+        builder.AddAttribute(1, "Items", items);
+        builder.AddAttribute(2, "CanManage", Session.CanManage);
+        builder.AddAttribute(3, "CanApprove", Session.CanApprove);
+        builder.AddAttribute(4, "View", EventCallback.Factory.Create<LeaveRequest>(this, OpenDetail));
+        builder.AddAttribute(5, "Edit", EventCallback.Factory.Create<LeaveRequest>(this, BeginEdit));
+        builder.AddAttribute(6, "Delete", EventCallback.Factory.Create<LeaveRequest>(this, AskDelete));
+        builder.CloseComponent();
+    };
+}

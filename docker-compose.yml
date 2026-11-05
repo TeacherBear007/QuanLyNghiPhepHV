@@ -1,0 +1,17 @@
+services:
+  nghiphep:
+    build: .
+    container_name: nghiphep
+    restart: unless-stopped
+    ports:
+      # Chi mo cong o 127.0.0.1 (nginx / cloudflared tren cung may goi vao duoc, nguoi ngoai thi khong).
+      # Vi trai = cong tren may host (7187), ve phai = cong trong container (8080).
+      - "127.0.0.1:7187:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      # Chi nhan request gui toi dung ten mien nay (doi cho khop ten mien cua ban).
+      - AllowedHosts=nghiphep.hoanganhplus01.io.vn;localhost
+    volumes:
+      # ve trai = thu muc that tren server, ve phai = thu muc trong container
+      - ./data/AppData:/app/AppData   # du lieu (file JSON, sau nay la file .db)
+      - ./data/keys:/app/keys         # khoa ma hoa, de restart khong bi loi form

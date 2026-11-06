@@ -12,10 +12,10 @@ builder.Services.AddSingleton<LeaveRepository>();
 builder.Services.AddScoped<DemoSession>();
 builder.Services.AddScoped<DemoAuthService>();
 
+// [THÊM 1] Đăng ký dịch vụ Health Checks để tạo endpoint kiểm tra trạng thái app
+builder.Services.AddHealthChecks();
+
 // [MỚI] App chạy sau nginx (và Cloudflare) nên phải đọc các header X-Forwarded-*
-// để biết người dùng thật đang vào bằng https và IP thật là gì.
-// Xóa KnownNetworks/KnownProxies là an toàn vì compose chỉ mở port ở 127.0.0.1
-// (chỉ nginx trên cùng máy mới gọi được vào app).
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -24,8 +24,6 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 
 // [MỚI] Lưu khóa mã hóa (cookie, antiforgery) ra thư mục có volume.
-// Không có dòng này thì mỗi lần container khởi động lại sẽ mất khóa -> lỗi khi gửi form.
-// Chỉ bật khi chạy thật (Production); chạy F5 trên máy mình thì bỏ qua.
 if (!builder.Environment.IsDevelopment())
 {
     var keyPath = builder.Configuration["DataProtection:KeyPath"] ?? "/app/keys";
@@ -46,13 +44,14 @@ if (!app.Environment.IsDevelopment())
 }
 else
 {
-    // [SỬA] Chỉ chuyển http -> https khi chạy trên máy mình.
-    // Ở server, nginx/Cloudflare đã lo HTTPS rồi, app chỉ nhận http nội bộ.
     app.UseHttpsRedirection();
 }
 
 app.UseStaticFiles();
 app.UseAntiforgery();
+
+// [THÊM 2] Map đường dẫn /health để trả về HTTP 200 OK khi kiểm tra
+app.MapHealthChecks("/health");
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
